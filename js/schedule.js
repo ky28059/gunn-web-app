@@ -1,6 +1,10 @@
-/* global fetch, caches, alert */
+/* global fetch, caches, alert, Notification */
 
-import { toAlternateSchedules } from './altScheduleGenerator.js?for=appdesign'
+import {
+  altScheduleRegex,
+  noSchoolRegex,
+  toAlternateSchedules
+} from './altScheduleGenerator.js?for=appdesign'
 import { getFontColour, scheduleApp } from './app.js'
 import {
   categoryList,
@@ -10,17 +14,20 @@ import {
 import { ColourPicker } from './colour.js'
 import { DatePicker } from './date.js'
 import { localize, localizeWith } from './l10n.js'
-import { makeDropdown, ripple } from './material.js'
+import { makeDropdown, materialInput, ripple } from './material.js'
 import { setOnSavedClubsUpdate } from './saved-clubs.js'
 import {
   ajax,
   ALT_KEY,
+  closeDialog,
   cookie,
   currentTime,
   escapeHTML,
+  googleCalendarId,
   isAppDesign,
   logError,
   now,
+  showDialog,
   toEach
 } from './utils.js'
 
@@ -45,51 +52,9 @@ export const letras = [
 // WARNING: if you change this it'll change everyone's saves; it's best to add a way to convert the saves properly
 const VERSION = 4
 // radios save format version
-const FORMATTING_VERSION = '7'
+const FORMATTING_VERSION = '9'
 const normalschedule = [
   null,
-  // Keeping old schedule in case the school ever returns to it if the pandemic goes away
-  /*
-  [
-    {name:'A',start:{hour:8,minute:25,totalminutes:505},end:{hour:9,minute:45,totalminutes:585}},
-    {name:'Brunch',start:{hour:9,minute:45,totalminutes:585},end:{hour:9,minute:50,totalminutes:590}},
-    {name:'B',start:{hour:10,minute:0,totalminutes:600},end:{hour:11,minute:15,totalminutes:675}},
-    {name:'C',start:{hour:11,minute:25,totalminutes:685},end:{hour:12,minute:40,totalminutes:760}},
-    {name:'Lunch',start:{hour:12,minute:40,totalminutes:760},end:{hour:13,minute:10,totalminutes:790}},
-    {name:'F',start:{hour:13,minute:20,totalminutes:800},end:{hour:14,minute:35,totalminutes:875}}
-  ], [
-    {name:'D',start:{hour:8,minute:25,totalminutes:505},end:{hour:9,minute:45,totalminutes:585}},
-    {name:'Brunch',start:{hour:9,minute:45,totalminutes:585},end:{hour:9,minute:50,totalminutes:590}},
-    {name:'Flex',start:{hour:10,minute:0,totalminutes:600},end:{hour:10,minute:50,totalminutes:650}},
-    {name:'E',start:{hour:11,minute:0,totalminutes:660},end:{hour:12,minute:15,totalminutes:735}},
-    {name:'Lunch',start:{hour:12,minute:15,totalminutes:735},end:{hour:12,minute:45,totalminutes:765}},
-    {name:'A',start:{hour:12,minute:55,totalminutes:775},end:{hour:14,minute:15,totalminutes:855}},
-    {name:'G',start:{hour:14,minute:25,totalminutes:865},end:{hour:15,minute:40,totalminutes:940}}
-  ], [
-    {name:'B',start:{hour:8,minute:25,totalminutes:505},end:{hour:9,minute:50,totalminutes:590}},
-    {name:'Brunch',start:{hour:9,minute:50,totalminutes:590},end:{hour:9,minute:55,totalminutes:595}},
-    {name:'C',start:{hour:10,minute:5,totalminutes:605},end:{hour:11,minute:25,totalminutes:685}},
-    {name:'D',start:{hour:11,minute:35,totalminutes:695},end:{hour:12,minute:55,totalminutes:775}},
-    {name:'Lunch',start:{hour:12,minute:55,totalminutes:775},end:{hour:13,minute:25,totalminutes:805}},
-    {name:'F',start:{hour:13,minute:35,totalminutes:815},end:{hour:14,minute:55,totalminutes:895}},
-  ], [
-    {name:'E',start:{hour:8,minute:25,totalminutes:505},end:{hour:9,minute:50,totalminutes:590}},
-    {name:'Brunch',start:{hour:9,minute:50,totalminutes:590},end:{hour:9,minute:55,totalminutes:595}},
-    {name:'Flex',start:{hour:10,minute:5,totalminutes:605},end:{hour:10,minute:55,totalminutes:655}},
-    {name:'B',start:{hour:11,minute:5,totalminutes:665},end:{hour:12,minute:15,totalminutes:735}},
-    {name:'Lunch',start:{hour:12,minute:15,totalminutes:735},end:{hour:12,minute:45,totalminutes:765}},
-    {name:'A',start:{hour:12,minute:55,totalminutes:775},end:{hour:14,minute:5,totalminutes:845}},
-    {name:'G',start:{hour:14,minute:15,totalminutes:855},end:{hour:15,minute:35,totalminutes:935}},
-  ], [
-    {name:'C',start:{hour:8,minute:25,totalminutes:505},end:{hour:9,minute:40,totalminutes:580}},
-    {name:'Brunch',start:{hour:9,minute:40,totalminutes:580},end:{hour:9,minute:45,totalminutes:585}},
-    {name:'D',start:{hour:9,minute:55,totalminutes:595},end:{hour:11,minute:5,totalminutes:665}},
-    {name:'E',start:{hour:11,minute:15,totalminutes:675},end:{hour:12,minute:25,totalminutes:745}},
-    {name:'Lunch',start:{hour:12,minute:25,totalminutes:745},end:{hour:12,minute:55,totalminutes:775}},
-    {name:'F',start:{hour:13,minute:5,totalminutes:785},end:{hour:14,minute:15,totalminutes:855}},
-    {name:'G',start:{hour:14,minute:25,totalminutes:865},end:{hour:15,minute:35,totalminutes:935}}
-  ],
-  */
   [
     { name: 'A', start: makeHMTM(10, 0), end: makeHMTM(10, 30) },
     { name: 'B', start: makeHMTM(10, 40), end: makeHMTM(11, 10) },
@@ -104,46 +69,32 @@ const normalschedule = [
     { name: 'A', start: makeHMTM(9, 0), end: makeHMTM(10, 15) },
     { name: 'B', start: makeHMTM(10, 25), end: makeHMTM(11, 40) },
     { name: 'Lunch', start: makeHMTM(11, 40), end: makeHMTM(12, 10) },
-    { name: 'C', start: makeHMTM(12, 20), end: makeHMTM(13, 35) },
-    { name: 'D', start: makeHMTM(13, 45), end: makeHMTM(15, 0) },
+    { name: 'C', start: makeHMTM(12, 20), end: makeHMTM(13, 40) },
+    { name: 'D', start: makeHMTM(13, 50), end: makeHMTM(15, 5) },
     { name: 'Flex', start: makeHMTM(15, 10), end: makeHMTM(15, 40) }
   ],
   [
     { name: 'E', start: makeHMTM(9, 40), end: makeHMTM(10, 55) },
-    {
-      name (d) {
-        const week = Math.floor(
-          (d - new Date(2020, 8 - 1, 17)) / 1000 / 60 / 60 / 24 / 7
-        )
-        // scheduleApp can get days outside of the school year because it
-        // calculates the schedule immediately before isSummer is set
-        if (week < 0) return 'SELF'
-        // First week's Gunn together is 5th period for some reason
-        if (week === 0) return 'E'
-        return 'ABCDEFG'[(week - 1) % 7]
-      },
-      start: makeHMTM(11, 5),
-      end: makeHMTM(11, 40)
-    },
+    { name: 'GT', start: makeHMTM(11, 5), end: makeHMTM(11, 40) },
     { name: 'Lunch', start: makeHMTM(11, 40), end: makeHMTM(12, 10) },
-    { name: 'F', start: makeHMTM(12, 20), end: makeHMTM(13, 35) },
-    { name: 'G', start: makeHMTM(13, 45), end: makeHMTM(15, 0) },
+    { name: 'F', start: makeHMTM(12, 20), end: makeHMTM(13, 40) },
+    { name: 'G', start: makeHMTM(13, 50), end: makeHMTM(15, 5) },
     { name: 'Flex', start: makeHMTM(15, 10), end: makeHMTM(15, 40) }
   ],
   [
     { name: 'A', start: makeHMTM(9, 0), end: makeHMTM(10, 15) },
     { name: 'B', start: makeHMTM(10, 25), end: makeHMTM(11, 40) },
     { name: 'Lunch', start: makeHMTM(11, 40), end: makeHMTM(12, 10) },
-    { name: 'C', start: makeHMTM(12, 20), end: makeHMTM(13, 35) },
-    { name: 'D', start: makeHMTM(13, 45), end: makeHMTM(15, 0) },
+    { name: 'C', start: makeHMTM(12, 20), end: makeHMTM(13, 40) },
+    { name: 'D', start: makeHMTM(13, 50), end: makeHMTM(15, 5) },
     { name: 'Flex', start: makeHMTM(15, 10), end: makeHMTM(15, 40) }
   ],
   [
     { name: 'E', start: makeHMTM(9, 40), end: makeHMTM(10, 55) },
     { name: 'SELF', start: makeHMTM(11, 5), end: makeHMTM(11, 40) },
     { name: 'Lunch', start: makeHMTM(11, 40), end: makeHMTM(12, 10) },
-    { name: 'F', start: makeHMTM(12, 20), end: makeHMTM(13, 35) },
-    { name: 'G', start: makeHMTM(13, 45), end: makeHMTM(15, 0) }
+    { name: 'F', start: makeHMTM(12, 20), end: makeHMTM(13, 40) },
+    { name: 'G', start: makeHMTM(13, 50), end: makeHMTM(15, 5) }
   ],
   null
 ]
@@ -230,8 +181,7 @@ export function cacheBackground (url, pd) {
     fetch(url, { mode: 'no-cors', cache: 'no-cache' })
   ]).then(([cache, res]) => cache.put(`./.period-images/${pd}`, res))
 }
-export function initSchedule (manualAltSchedules = {}) {
-  const letterPdFormat = localize('periodx')
+export function initSchedule (manualAltSchedulesProm) {
   const periodstyles = {
     NO_SCHOOL: { label: localize('no-school') },
     // Default period names and styles
@@ -239,14 +189,38 @@ export function initSchedule (manualAltSchedules = {}) {
     Lunch: { label: localize('lunch'), colour: '#9E9E9E' },
     Flex: { label: localize('flex'), colour: '#607D8B' },
     SELF: { label: localize('self'), colour: '#455a64' },
-    A: { label: letterPdFormat.replace('{X}', '1'), colour: '#f44336' },
-    B: { label: letterPdFormat.replace('{X}', '2'), colour: '#2196F3' },
-    C: { label: letterPdFormat.replace('{X}', '3'), colour: '#FFEB3B' },
-    D: { label: letterPdFormat.replace('{X}', '4'), colour: '#795548' },
-    E: { label: letterPdFormat.replace('{X}', '5'), colour: '#FF9800' },
-    F: { label: letterPdFormat.replace('{X}', '6'), colour: '#9C27B0' },
-    G: { label: letterPdFormat.replace('{X}', '7'), colour: '#4CAF50' },
-    H: { label: letterPdFormat.replace('{X}', '8'), colour: '#673AB7' },
+    A: {
+      label: localizeWith('periodx', 'other', { X: '1' }),
+      colour: '#f44336'
+    },
+    B: {
+      label: localizeWith('periodx', 'other', { X: '2' }),
+      colour: '#2196F3'
+    },
+    C: {
+      label: localizeWith('periodx', 'other', { X: '3' }),
+      colour: '#FFEB3B'
+    },
+    D: {
+      label: localizeWith('periodx', 'other', { X: '4' }),
+      colour: '#795548'
+    },
+    E: {
+      label: localizeWith('periodx', 'other', { X: '5' }),
+      colour: '#FF9800'
+    },
+    F: {
+      label: localizeWith('periodx', 'other', { X: '6' }),
+      colour: '#9C27B0'
+    },
+    G: {
+      label: localizeWith('periodx', 'other', { X: '7' }),
+      colour: '#4CAF50'
+    },
+    H: {
+      label: localizeWith('periodx', 'other', { X: '8' }),
+      colour: '#673AB7'
+    },
     '0': { label: localize('p0'), colour: '#009688' }
   }
   if (cookie.getItem('[gunn-web-app] scheduleapp.options')) {
@@ -278,6 +252,12 @@ export function initSchedule (manualAltSchedules = {}) {
         options.push([periodstyles[l].label, periodstyles[l].colour])
       }
   }
+  for (let i = 0; i < letras.length; i++) {
+    if (!periodstyles[letras[i]]) periodstyles[letras[i]] = {}
+    periodstyles[letras[i]].label = options[i][0]
+    periodstyles[letras[i]].colour = options[i][1]
+    periodstyles[letras[i]].link = options[i][2]
+  }
   /* SCHEDULE APP */
   const defaultThings = [
     FORMATTING_VERSION, // 0
@@ -290,7 +270,13 @@ export function initSchedule (manualAltSchedules = {}) {
     'show', // 7
     'no', // 8
     'preps', // 9
-    'yes-h-period' // 10
+    'unset', // 10
+    'off', // 11
+    'swipe', // 12
+    'off', // 13
+    '', // 14
+    '', // 15
+    '' // 16
   ]
   const formatOptions = cookie.getItem(
     '[gunn-web-app] scheduleapp.formatOptions'
@@ -341,7 +327,29 @@ export function initSchedule (manualAltSchedules = {}) {
   }
   if (formatOptions[0] === '6') {
     formatOptions[0] = '7'
-    formatOptions[10] = 'yes-h-period' // show H period?
+    formatOptions[10] = 'unset' // show H period?
+    cookie.setItem(
+      '[gunn-web-app] scheduleapp.formatOptions',
+      formatOptions.join('.')
+    )
+  }
+  if (formatOptions[0] === '7') {
+    formatOptions[0] = '8'
+    formatOptions[11] = 'off' // time before period for notification
+    // allow swiping? (both - off; swipe - on) (was going to be for when
+    // notification is triggered)
+    formatOptions[12] = 'swipe'
+    cookie.setItem(
+      '[gunn-web-app] scheduleapp.formatOptions',
+      formatOptions.join('.')
+    )
+  }
+  if (formatOptions[0] === '8') {
+    formatOptions[0] = '9'
+    formatOptions[13] = 'off' // time before period for opening link
+    formatOptions[14] = '' // open link in new tab?
+    formatOptions[15] = '' // [reserved]
+    formatOptions[16] = '' // [reserved]
     cookie.setItem(
       '[gunn-web-app] scheduleapp.formatOptions',
       formatOptions.join('.')
@@ -349,6 +357,14 @@ export function initSchedule (manualAltSchedules = {}) {
   }
   if (formatOptions[0] !== FORMATTING_VERSION) {
     // you should be worried
+    console.warn(
+      'Was expecting version',
+      FORMATTING_VERSION,
+      'but got version',
+      formatOptions[0],
+      "Here's the old formatOptions before they're reset:",
+      formatOptions
+    )
     cookie.setItem(
       '[gunn-web-app] scheduleapp.formatOptions',
       defaultThings.join('.')
@@ -472,11 +488,11 @@ export function initSchedule (manualAltSchedules = {}) {
     window.location.reload()
   })
   const pd8Switch = document.getElementById('show-h')
-  if (formatOptions[10] === 'yes-h-period') pd8Switch.classList.add('checked')
+  if (formatOptions[10] === 'yes-h-period2') pd8Switch.classList.add('checked')
   pd8Switch.parentNode.addEventListener('click', e => {
     pd8Switch.classList.toggle('checked')
     formatOptions[10] = pd8Switch.classList.contains('checked')
-      ? 'yes-h-period'
+      ? 'yes-h-period2'
       : 'no-h-period'
     cookie.setItem(
       '[gunn-web-app] scheduleapp.formatOptions',
@@ -505,6 +521,19 @@ export function initSchedule (manualAltSchedules = {}) {
     }
     hideSupportIcon.textContent = nowHidden ? 'expand_more' : 'expand_less'
     formatOptions[7] = nowHidden ? 'hide' : 'show'
+    cookie.setItem(
+      '[gunn-web-app] scheduleapp.formatOptions',
+      formatOptions.join('.')
+    )
+  })
+  const allowSwiping = document.getElementById('allow-swipe')
+  if (formatOptions[12] === 'swipe') allowSwiping.classList.add('checked')
+  allowSwiping.parentNode.addEventListener('click', e => {
+    allowSwiping.classList.toggle('checked')
+    scheduleAppWrapper.classList.toggle('allowing-swipe')
+    formatOptions[12] = allowSwiping.classList.contains('checked')
+      ? 'swipe'
+      : 'both'
     cookie.setItem(
       '[gunn-web-app] scheduleapp.formatOptions',
       formatOptions.join('.')
@@ -636,13 +665,13 @@ export function initSchedule (manualAltSchedules = {}) {
     })
     dueDate.day = dueObj
     contentInput.value = text
-    editorDialog.classList.add('show')
+    showDialog(editorDialog)
     contentInput.focus()
     setImportance(importance)
     let onSave, onDelete, onFinish
     currentCancelFn = () => {
       onDeleteClick = onSaveClick = currentCancelFn = null
-      editorDialog.classList.remove('show')
+      closeDialog()
     }
     onDeleteClick = () => {
       currentCancelFn()
@@ -768,33 +797,114 @@ export function initSchedule (manualAltSchedules = {}) {
     refresh.click()
   }
 
-  const weekwrapper = document.querySelector('#weekwrapper')
-  function makeWeekHappen () {
-    let innerHTML = ''
-    const days = localize('ds').split('  ')
-    const week = scheduleapp.getWeek()
-    for (let i = 0; i < 7; i++) {
-      innerHTML += `<div${week[i].today ? ' class="today"' : ''}><h1>${
-        days[i]
-      }</h1>`
-      for (
-        let j = 0, arr = week[i], len = arr.length, period = arr[j];
-        j < len;
-        j++, period = arr[j]
-      )
-        innerHTML += `<span style="${
-          period.colour[0] === '#'
-            ? `background-color:${period.colour};`
-            : `background-image: url(./.period-images/${
-                period.id
-              }?${encodeURIComponent(period.colour)});`
-        }" title="${escapeHTML(period.label)}"></span>`
-      innerHTML += `</div>`
+  const notifSettings = {
+    enabled: false,
+    timeBefore: 5 * 60
+  }
+  const notifDropdownWrapper = document.getElementById('notif-time-before')
+  const notifDropdown = makeDropdown(notifDropdownWrapper, [
+    [15 * 60, localize('time-before/before-0-15-00')],
+    [10 * 60, localize('time-before/before-0-10-00')],
+    [5 * 60, localize('time-before/before-0-05-00')],
+    [2 * 60, localize('time-before/before-0-02-00')],
+    [1 * 60, localize('time-before/before-0-01-00')],
+    [30, localize('time-before/before-0-00-30')],
+    [10, localize('time-before/before-0-00-10')],
+    [0, localize('time-before/immediately')],
+    [null, localize('time-before/never')]
+  ]).set(null)
+  if ('Notification' in window) {
+    if (formatOptions[11] !== 'off' && Notification.permission === 'granted') {
+      notifDropdown.set(+formatOptions[11])
+      notifSettings.enabled = true
+      notifSettings.timeBefore = +formatOptions[11]
     }
-    weekwrapper.innerHTML = innerHTML
+    notifDropdown.onChange(async time => {
+      if (time !== null) {
+        if (
+          Notification.permission === 'granted' ||
+          (await Notification.requestPermission()) === 'granted'
+        ) {
+          notifSettings.enabled = true
+          notifSettings.timeBefore = time
+          formatOptions[11] = time
+        } else {
+          time = null
+          notifDropdown.set(null)
+        }
+      }
+      if (time === null) {
+        formatOptions[11] = 'off'
+        notifSettings.enabled = false
+      }
+      scheduleapp.updateNextNotif()
+      cookie.setItem(
+        '[gunn-web-app] scheduleapp.formatOptions',
+        formatOptions.join('.')
+      )
+    })
+  } else {
+    // Remove option if notifications aren't supported
+    notifDropdownWrapper.parentNode.parentNode.removeChild(
+      notifDropdownWrapper.parentNode
+    )
+  }
+  const weekwrapper = document.querySelector('#weekwrapper')
+  let lastWeek = null
+  function makeWeekHappen () {
+    const week = scheduleapp.getWeek()
+    const serialized = JSON.stringify(week)
+    if (lastWeek !== serialized) {
+      // Only regenerate the weekwrapper if the week changed
+      lastWeek = serialized
+      weekwrapper.innerHTML = ''
+      const days = localize('ds').split('  ')
+      for (let i = 0; i < week.length; i++) {
+        const day = week[i]
+        const div = Object.assign(document.createElement('div'), {
+          className: day.today ? 'today' : ''
+        })
+        ripple(div)
+        div.addEventListener('click', e => {
+          const d = day.date
+          datepicker.day = {
+            d: d.getDate(),
+            m: d.getMonth(),
+            y: d.getFullYear()
+          }
+        })
+        div.appendChild(
+          Object.assign(document.createElement('h1'), {
+            textContent: days[i]
+          })
+        )
+        for (const period of day) {
+          const span = Object.assign(document.createElement('span'), {
+            title: period.label
+          })
+          if (period.colour[0] === '#') {
+            span.style.backgroundColor = period.colour
+          } else {
+            span.style.backgroundImage = `url(./.period-images/${
+              period.id
+            }?${encodeURIComponent(period.colour)})`
+          }
+          if (period.id === 'GT') {
+            span.title = localize('gunn-together/name')
+            span.classList.add('gt-confuse')
+          }
+          div.appendChild(span)
+        }
+        weekwrapper.appendChild(div)
+      }
+    }
+    for (let i = 0; i < weekwrapper.children.length; i++) {
+      const day = week[i]
+      const div = weekwrapper.children[i]
+      div.className = day.today ? 'today' : ''
+    }
     renderEvents()
   }
-  const altSchedRegex = /schedule|extended|holiday|no students|break|development/i
   const eventsul = document.querySelector('#events')
   const events = {}
   const months = localize('months').split('  ')
@@ -851,19 +961,27 @@ export function initSchedule (manualAltSchedules = {}) {
       }
       eventsul.innerHTML = innerHTML
     }
-    if (events[offset]) actuallyRenderEvents(events[offset])
-    else {
+    if (events[offset]) {
+      if (events[offset] !== 'loading') {
+        actuallyRenderEvents(events[offset])
+      }
+    } else {
       const dateDate = new Date(
         d.getFullYear(),
         d.getMonth(),
         d.getDate() + offset
       ).toISOString()
+      const end = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate() + offset + 1
+      )
+      end.setMilliseconds(-1) // Do not include the first millisecond of the next day
+      events[offset] = 'loading'
       ajax(
-        `https://www.googleapis.com/calendar/v3/calendars/u5mgb2vlddfj70d7frf3r015h0@group.calendar.google.com/events?key=AIzaSyDBYs4DdIaTjYx5WDz6nfdEAftXuctZV0o&timeMin=${dateDate}&timeMax=${new Date(
-          d.getFullYear(),
-          d.getMonth(),
-          d.getDate() + offset + 1
-        ).toISOString()}&showDeleted=false&singleEvents=true&orderBy=startTime&fields=items(description%2Cend(date%2CdateTime)%2Clocation%2Cstart(date%2CdateTime)%2Csummary)`,
+        // timeZone=America/Los_Angeles because the calendar is in UTC so
+        // full-day events from the next day would otherwise be included
+        `https://www.googleapis.com/calendar/v3/calendars/${googleCalendarId}/events?key=AIzaSyDBYs4DdIaTjYx5WDz6nfdEAftXuctZV0o&timeMin=${dateDate}&timeMax=${end.toISOString()}&timeZone=America/Los_Angeles&showDeleted=false&singleEvents=true&orderBy=startTime&fields=items(description%2Cend(date%2CdateTime)%2Clocation%2Cstart(date%2CdateTime)%2Csummary)`,
         json => {
           json = JSON.parse(json).items
           const e = []
@@ -881,8 +999,10 @@ export function initSchedule (manualAltSchedules = {}) {
             actuallyRenderEvents(events[offset])
 
           const date = dateDate.slice(5, 10)
-          const alternateJSON = json.filter(ev =>
-            altSchedRegex.test(ev.summary)
+          const alternateJSON = json.filter(
+            ev =>
+              altScheduleRegex.test(ev.summary) ||
+              noSchoolRegex.test(ev.summary)
           )
           const altSched = toAlternateSchedules(alternateJSON)
           let ugwitaAltObj = {}
@@ -943,8 +1063,14 @@ export function initSchedule (manualAltSchedules = {}) {
     name = name.toLowerCase()
     if (~name.indexOf('period')) {
       // Detect PeriodE/PeriodG (2020-03-31)
-      const letter = /(?:\b|period)([a-g])\b/i.exec(name)
-      if (letter) return letter[1].toUpperCase()
+      const letter = /(?:\b|period)([a-g1-7])\b/i.exec(name)
+      if (letter) {
+        return isNaN(+letter[1])
+          ? // Letter period
+            letter[1].toUpperCase()
+          : // Number period
+            ' ABCDEFG'[letter[1]]
+      }
     }
     if (~name.indexOf('self')) return 'SELF'
     else if (
@@ -956,6 +1082,7 @@ export function initSchedule (manualAltSchedules = {}) {
       return 'Flex'
     else if (~name.indexOf('brunch') || ~name.indexOf('break')) return 'Brunch'
     else if (~name.indexOf('unch') || ~name.indexOf('turkey')) return 'Lunch'
+    else if (~name.indexOf('together')) return 'GT'
     else return name
   }
   const daynames = localize('days').split('  ')
@@ -1016,21 +1143,23 @@ export function initSchedule (manualAltSchedules = {}) {
     if (!dayString.includes('-')) continue
     ugwaifyAlternates(alternates, dayString, alternates[dayString])
   }
-  for (let i = 0; i < letras.length; i++) {
-    if (!periodstyles[letras[i]]) periodstyles[letras[i]] = {}
-    periodstyles[letras[i]].label = options[i][0]
-    periodstyles[letras[i]].colour = options[i][1]
-  }
   // const hPeriods =
   //   JSON.parse(cookie.getItem('[gunn-web-app] scheduleapp.h')) || []
+  const scheduleAppWrapper = document.querySelector('#schedulewrapper')
+  let manualAltSchedules = {}
+  manualAltSchedulesProm.then(schedules => {
+    manualAltSchedules = schedules
+    scheduleapp.render()
+    makeWeekHappen()
+  })
   const scheduleapp = scheduleApp({
-    element: document.querySelector('#schedulewrapper'),
+    element: scheduleAppWrapper,
     periods: periodstyles,
     normal: normalschedule,
     alternates: alternates,
     selfDays: selfDays,
     get hPeriods () {
-      return formatOptions[10] === 'yes-h-period'
+      return formatOptions[10] === 'yes-h-period2'
         ? [
             null,
             [makeHMTM(15, 45).totalminutes, makeHMTM(16, 15).totalminutes],
@@ -1065,12 +1194,14 @@ export function initSchedule (manualAltSchedules = {}) {
       const { periods, description = localize('default-alt-msg') } = schedule
       return {
         periods:
-          formatOptions[10] === 'yes-h-period'
+          formatOptions[10] === 'yes-h-period2'
             ? periods
             : periods.filter(pd => pd.name !== 'H'),
         alternate: { description }
       }
     },
+    notifSettings,
+    openLinkBefore: formatOptions[13] === 'off' ? null : +formatOptions[13],
     autorender: false
   })
   setOnSavedClubsUpdate(scheduleapp.render)
@@ -1100,6 +1231,7 @@ export function initSchedule (manualAltSchedules = {}) {
   }
   scheduleapp.options.isSummer = (y, m, d) =>
     !datepicker.inrange({ y: y, m: m, d: d })
+  scheduleapp.updateNextNotif()
   function isSchoolDay (d) {
     return scheduleapp.getSchedule(d).periods.length
   }
@@ -1133,10 +1265,13 @@ export function initSchedule (manualAltSchedules = {}) {
   }
   if (previewingFuture) {
     previewingFuture = document.createElement('div')
-    previewingFuture.className = 'material-card previewing-future-notice'
+    previewingFuture.className = 'previewing-future-notice-wrapper'
+    const card = document.createElement('div')
+    card.className = 'material-card previewing-future-notice'
+    previewingFuture.appendChild(card)
     const span = document.createElement('span')
     span.textContent = localize('previewing-future')
-    previewingFuture.appendChild(span)
+    card.appendChild(span)
     const todayBtn = document.createElement('button')
     todayBtn.className = 'material'
     todayBtn.textContent = localize('return-today')
@@ -1150,7 +1285,7 @@ export function initSchedule (manualAltSchedules = {}) {
       }
     })
     ripple(todayBtn)
-    previewingFuture.appendChild(todayBtn)
+    card.appendChild(todayBtn)
     const closeBtn = document.createElement('button')
     closeBtn.className = 'material'
     closeBtn.textContent = localize('close-future')
@@ -1159,7 +1294,7 @@ export function initSchedule (manualAltSchedules = {}) {
       previewingFuture = null
     })
     ripple(closeBtn)
-    previewingFuture.appendChild(closeBtn)
+    card.appendChild(closeBtn)
     const parent = document.querySelector('.section.schedule')
     parent.insertBefore(previewingFuture, parent.firstChild)
   }
@@ -1234,77 +1369,107 @@ export function initSchedule (manualAltSchedules = {}) {
     }
   })
 
+  if (formatOptions[12] === 'swipe') {
+    scheduleAppWrapper.classList.add('allowing-swipe')
+  }
+  const MIN_SWIPE_DIST = 40
+  const SWIPE_THRESHOLD = 0.3
+  const swipePreview = document.getElementById('swipe-preview')
+  let swiping = null
+  scheduleAppWrapper.addEventListener('pointerdown', e => {
+    if (formatOptions[12] === 'swipe' && swiping === null) {
+      swiping = {
+        pointerId: e.pointerId,
+        swiping: false,
+        startX: e.clientX,
+        swipingOffset: 0
+      }
+      e.target.setPointerCapture(e.pointerId)
+    }
+  })
+  scheduleAppWrapper.addEventListener('pointermove', e => {
+    if (swiping && swiping.pointerId === e.pointerId) {
+      const { width } = scheduleapp.container.getBoundingClientRect()
+      if (!swiping.swiping) {
+        if (Math.abs(e.clientX - swiping.startX) > MIN_SWIPE_DIST) {
+          swiping.swiping = true
+          scheduleAppWrapper.classList.add('swiping')
+          scheduleAppWrapper.style.userSelect = 'none'
+        }
+      }
+      if (swiping.swiping) {
+        const offset = e.clientX > swiping.startX ? -1 : 1
+        if (offset !== swiping.swipingOffset) {
+          swiping.swipingOffset = offset
+          swipePreview.innerHTML = scheduleapp.generateHtmlForOffset(
+            scheduleapp.offset + offset
+          )
+          swipePreview.style.transform =
+            offset === -1 ? 'translate(-100%)' : 'translate(100%)'
+        }
+        const swipeX = e.clientX - swiping.startX
+        scheduleapp.container.style.transform = `translateX(${swipeX}px)`
+        scheduleapp.container.style.opacity = 1 - Math.abs(swipeX) / width
+        swipePreview.style.left = swipeX + 'px'
+        swipePreview.style.opacity = Math.abs(swipeX) / width
+      }
+    }
+  })
+  async function swipeEnd (e) {
+    if (swiping && swiping.pointerId === e.pointerId) {
+      if (swiping.swiping) {
+        const { width } = scheduleapp.container.getBoundingClientRect()
+        const swipeX = e.clientX - swiping.startX
+        let change = false
+        if (swiping.swipingOffset === -1) {
+          if (swipeX > width * SWIPE_THRESHOLD) {
+            change = true
+            yesterdayer.click()
+            scheduleapp.container.style.transform = `translateX(${swipeX -
+              width}px)`
+          }
+        } else {
+          if (swipeX < -width * SWIPE_THRESHOLD) {
+            change = true
+            tomorrower.click()
+            scheduleapp.container.style.transform = `translateX(${swipeX +
+              width}px)`
+          }
+        }
+        if (change) {
+          scheduleapp.container.style.opacity = swipePreview.style.opacity
+          // Force repaint
+          window
+            .getComputedStyle(scheduleapp.container)
+            .getPropertyValue('transform')
+        }
+        scheduleAppWrapper.classList.remove('swiping')
+        scheduleAppWrapper.style.userSelect = null
+        scheduleapp.container.style.transform = null
+        scheduleapp.container.style.opacity = null
+      }
+      swiping = null
+    }
+  }
+  scheduleAppWrapper.addEventListener('pointerup', swipeEnd)
+  scheduleAppWrapper.addEventListener('pointercancel', swipeEnd)
+
   /* CUSTOMISE PERIODS */
   const materialcolours = 'f44336 E91E63 9C27B0 673AB7 3F51B5 2196F3 03A9F4 00BCD4 009688 4CAF50 8BC34A CDDC39 FFEB3B FFC107 FF9800 FF5722 795548 9E9E9E 607D8B'.split(
     ' '
   )
-  function materialInput (labeltext) {
-    const inputwrapper = document.createElement('div')
-    const label = document.createElement('label')
-    const input = document.createElement('input')
-    const line = document.createElement('div')
-    inputwrapper.classList.add('customiser-inputwrapper')
-    label.classList.add('customiser-label')
-    label.innerHTML = labeltext
-    input.classList.add('customiser-input')
-    input.setAttribute('aria-label', localize('period-name-label') + labeltext)
-    input.addEventListener(
-      'change',
-      e => {
-        if (input.value) inputwrapper.classList.add('filled')
-        else inputwrapper.classList.remove('filled')
-      },
-      false
-    )
-    input.addEventListener(
-      'mouseenter',
-      e => {
-        inputwrapper.classList.add('hover')
-      },
-      false
-    )
-    input.addEventListener(
-      'mouseleave',
-      e => {
-        inputwrapper.classList.remove('hover')
-      },
-      false
-    )
-    input.addEventListener(
-      'focus',
-      e => {
-        inputwrapper.classList.add('focus')
-      },
-      false
-    )
-    input.addEventListener(
-      'blur',
-      e => {
-        inputwrapper.classList.remove('focus')
-      },
-      false
-    )
-    line.classList.add('customiser-line')
-    inputwrapper.appendChild(label)
-    inputwrapper.appendChild(input)
-    inputwrapper.appendChild(line)
-    return {
-      wrapper: inputwrapper,
-      label: label,
-      input: input,
-      line: line
-    }
-  }
   function addPeriodCustomisers (elem) {
-    function period (name, id, colour = '#FF594C', val = '') {
+    function period (name, id, [val = '', colour = '#FF594C', link = '']) {
       let isImage = colour[0] !== '#'
       let init = true
       const div = document.createElement('div')
+      div.classList.add('customiser-wrapper')
       const pickertrigger = document.createElement('button')
       const picker = new ColourPicker(e => {
         if (isImage) return
         pickertrigger.style.backgroundColor = e
-        if (scheduleapp) scheduleapp.setPeriod(id, '', e, !init)
+        if (scheduleapp) scheduleapp.setPeriod(id, { colour: e }, !init)
+        makeWeekHappen()
         if (init) {
           init = false
         } else {
@@ -1323,8 +1488,6 @@ export function initSchedule (manualAltSchedules = {}) {
           pickertrigger.classList.remove('ripple-dark')
         }
       })
-      const input = materialInput(name)
-      div.classList.add('customiser-wrapper')
       ripple(pickertrigger)
       pickertrigger.classList.add('material')
       pickertrigger.classList.add('customiser-colour')
@@ -1341,6 +1504,13 @@ export function initSchedule (manualAltSchedules = {}) {
       )
       picker.colour = isImage ? '#FF594C' : colour
       div.appendChild(pickertrigger)
+      const inputWrapper = document.createElement('div')
+      inputWrapper.className = 'inputs-wrapper'
+      const input = materialInput(
+        name,
+        'text',
+        localizeWith('period-name-label', 'other', { P: name })
+      )
       if (val) {
         input.input.value = val
         input.wrapper.classList.add('filled')
@@ -1348,10 +1518,10 @@ export function initSchedule (manualAltSchedules = {}) {
       input.input.addEventListener(
         'change',
         e => {
-          // `null` for third input means do not change `colour`
-          // (`setPeriod` checks whether third input is truthy)
-          if (scheduleapp)
-            scheduleapp.setPeriod(id, input.input.value, null, true)
+          if (scheduleapp) {
+            scheduleapp.setPeriod(id, { name: input.input.value }, true)
+          }
+          makeWeekHappen()
           options[letras.indexOf(id)][0] = input.input.value
           if (periodstyles[id].update) periodstyles[id].update()
           cookie.setItem(
@@ -1361,7 +1531,35 @@ export function initSchedule (manualAltSchedules = {}) {
         },
         false
       )
-      div.appendChild(input.wrapper)
+      inputWrapper.appendChild(input.wrapper)
+      const linkInput = materialInput(
+        localizeWith('period-link', 'other', { P: name }),
+        'url',
+        localizeWith('period-set-link', 'other', { P: name })
+      )
+      if (link) {
+        linkInput.input.value = link
+        linkInput.wrapper.classList.add('filled')
+      }
+      linkInput.input.addEventListener(
+        'change',
+        e => {
+          if (scheduleapp) {
+            scheduleapp.setPeriod(id, { link: linkInput.input.value }, true)
+          }
+          makeWeekHappen()
+          options[letras.indexOf(id)][2] = linkInput.input.value
+          // No need to call .update() on periodstyles because the link is not
+          // relevant to rendering the period dropdowns
+          cookie.setItem(
+            '[gunn-web-app] scheduleapp.options',
+            JSON.stringify(options)
+          )
+        },
+        false
+      )
+      inputWrapper.appendChild(linkInput.wrapper)
+      div.appendChild(inputWrapper)
       elem.appendChild(div)
       const t = document.createElement('div')
       t.classList.add('customiser-colourwrapper')
@@ -1397,25 +1595,30 @@ export function initSchedule (manualAltSchedules = {}) {
       )
       t.appendChild(s)
       picker.window.appendChild(t)
-      const imageInput = document.createElement('input')
-      imageInput.classList.add('customiser-image')
-      imageInput.classList.add('notmaterial-input')
-      imageInput.placeholder = localize('image-url')
+      const imageInput = materialInput(localize('image-url'), 'url')
+      imageInput.wrapper.classList.add('customiser-image')
       if (isImage) {
-        imageInput.value = colour
+        imageInput.input.value = colour
+        imageInput.wrapper.classList.add('filled')
       }
-      imageInput.addEventListener('change', e => {
+      imageInput.input.addEventListener('change', e => {
         imageInput.disabled = true
-        if (imageInput.value) {
-          cacheBackground(imageInput.value, id)
+        if (imageInput.input.value) {
+          cacheBackground(imageInput.input.value, id)
             .then(() => {
               imageInput.disabled = false
               isImage = true
               // intentionally not resetting backgroundColor because transparency meh
               pickertrigger.style.backgroundImage = `url(./.period-images/${id}?${currentTime()})`
-              if (scheduleapp)
-                scheduleapp.setPeriod(id, '', imageInput.value, true)
-              options[letras.indexOf(id)][1] = imageInput.value
+              if (scheduleapp) {
+                scheduleapp.setPeriod(
+                  id,
+                  { colour: imageInput.input.value },
+                  true
+                )
+              }
+              makeWeekHappen()
+              options[letras.indexOf(id)][1] = imageInput.input.value
               if (periodstyles[id].update) periodstyles[id].update()
               cookie.setItem(
                 '[gunn-web-app] scheduleapp.options',
@@ -1438,8 +1641,10 @@ export function initSchedule (manualAltSchedules = {}) {
               isImage = false
               pickertrigger.style.backgroundColor = picker.colour
               pickertrigger.style.backgroundImage = null
-              if (scheduleapp)
-                scheduleapp.setPeriod(id, '', picker.colour, true)
+              if (scheduleapp) {
+                scheduleapp.setPeriod(id, { colour: picker.colour }, true)
+              }
+              makeWeekHappen()
               options[letras.indexOf(id)][1] = picker.colour
               if (periodstyles[id].update) periodstyles[id].update()
               cookie.setItem(
@@ -1460,62 +1665,87 @@ export function initSchedule (manualAltSchedules = {}) {
             })
         }
       })
-      picker.window.appendChild(imageInput)
+      picker.window.appendChild(imageInput.wrapper)
       return period
     }
     return period
   }
   const periodCustomisers = document.createDocumentFragment()
-  let customiserAdder = addPeriodCustomisers(periodCustomisers)
-  if (formatOptions[8] === 'yes')
-    customiserAdder = customiserAdder(
-      localize('p0'),
-      '0',
-      options[13][1],
-      options[13][0]
-    )
-  customiserAdder(
-    letterPdFormat.replace('{X}', '1'),
-    'A',
-    options[1][1],
-    options[1][0]
-  )(letterPdFormat.replace('{X}', '2'), 'B', options[2][1], options[2][0])(
-    letterPdFormat.replace('{X}', '3'),
-    'C',
-    options[3][1],
-    options[3][0]
-  )(letterPdFormat.replace('{X}', '4'), 'D', options[4][1], options[4][0])(
-    letterPdFormat.replace('{X}', '5'),
-    'E',
-    options[5][1],
-    options[5][0]
-  )(letterPdFormat.replace('{X}', '6'), 'F', options[6][1], options[6][0])(
-    letterPdFormat.replace('{X}', '7'),
-    'G',
-    options[7][1],
-    options[7][0]
-  )(letterPdFormat.replace('{X}', '8'), 'H', options[12][1], options[12][0])(
-    localize('flex'),
-    'Flex',
-    options[8][1],
-    options[8][0]
-  )
+  const addCustomiser = addPeriodCustomisers(periodCustomisers)
+  if (formatOptions[8] === 'yes') {
+    addCustomiser(localize('p0'), '0', options[13][1], options[13][0])
+  }
+  addCustomiser(localizeWith('periodx', 'other', { X: '1' }), 'A', options[1])
+  addCustomiser(localizeWith('periodx', 'other', { X: '2' }), 'B', options[2])
+  addCustomiser(localizeWith('periodx', 'other', { X: '3' }), 'C', options[3])
+  addCustomiser(localizeWith('periodx', 'other', { X: '4' }), 'D', options[4])
+  addCustomiser(localizeWith('periodx', 'other', { X: '5' }), 'E', options[5])
+  addCustomiser(localizeWith('periodx', 'other', { X: '6' }), 'F', options[6])
+  addCustomiser(localizeWith('periodx', 'other', { X: '7' }), 'G', options[7])
+  // Always show the H period customisation because period customisers can't be
+  // (easily) added in dynamically, and the show H period option doesn't reload.
+  // if (formatOptions[10] === 'yes-h-period2') {
+  addCustomiser(localizeWith('periodx', 'other', { X: '8' }), 'H', options[12])
+  // }
+  addCustomiser(localize('flex'), 'Flex', options[8])
   // if (+formatOptions[3])
-  customiserAdder = customiserAdder(
-    localize('self'),
-    'SELF',
-    options[11][1],
-    options[11][0]
-  )
+  addCustomiser(localize('self'), 'SELF', options[11])
   // TEMP: Brunch is not on the schedule
-  // customiserAdder(localize('brunch'), 'Brunch', options[9][1], options[9][0])(
-  customiserAdder(localize('lunch'), 'Lunch', options[10][1], options[10][0])
+  // addCustomiser(localize('brunch'), 'Brunch', options[9])
+  addCustomiser(localize('lunch'), 'Lunch', options[10])
   document
     .querySelector('.section.options')
     .insertBefore(
       periodCustomisers,
       document.querySelector('#periodcustomisermarker')
     )
+
+  const openLinkDropdownWrapper = document.getElementById('link-time-before')
+  const openLinkDropdown = makeDropdown(openLinkDropdownWrapper, [
+    [60 * 60, localize('time-before/before-1-00-00')],
+    [30 * 60, localize('time-before/before-0-30-00')],
+    [15 * 60, localize('time-before/before-0-15-00')],
+    [10 * 60, localize('time-before/before-0-10-00')],
+    [5 * 60, localize('time-before/before-0-05-00')],
+    [2 * 60, localize('time-before/before-0-02-00')],
+    [1 * 60, localize('time-before/before-0-01-00')],
+    [0, localize('time-before/immediately')],
+    [null, localize('time-before/never')]
+  ]).set(scheduleapp.options.openLinkBefore)
+  openLinkDropdown.onChange(async time => {
+    scheduleapp.options.openLinkBefore = time
+    formatOptions[13] = time === null ? 'off' : time
+    scheduleapp.updateNextLinkOpen()
+    cookie.setItem(
+      '[gunn-web-app] scheduleapp.formatOptions',
+      formatOptions.join('.')
+    )
+  })
+  const openInFrame = document.getElementById('use-iframe')
+  scheduleapp.options.openLinkInIframe =
+    formatOptions[14] !== 'yes' && setIframe
+  if (formatOptions[14] !== 'yes') openInFrame.classList.add('checked')
+  openInFrame.parentNode.addEventListener('click', e => {
+    openInFrame.classList.toggle('checked')
+    formatOptions[14] = openInFrame.classList.contains('checked') ? '' : 'yes'
+    scheduleapp.options.openLinkInIframe =
+      formatOptions[14] !== 'yes' && setIframe
+    cookie.setItem(
+      '[gunn-web-app] scheduleapp.formatOptions',
+      formatOptions.join('.')
+    )
+  })
+  const iframeDialog = document.getElementById('iframe-window')
+  const iframe = document.getElementById('iframe')
+  const iframeTitleLink = document.getElementById('iframe-title')
+  const iframeTitle = document.createTextNode('')
+  iframeTitleLink.insertBefore(iframeTitle, iframeTitleLink.firstChild)
+  function setIframe (url, name) {
+    iframe.src = url
+    iframeTitleLink.href = url
+    iframeTitle.nodeValue = name
+    showDialog(iframeDialog)
+  }
 
   // TEMP: H period editor not needed this year?
   // const MIN_TIME = 15 * 60
@@ -1524,7 +1754,7 @@ export function initSchedule (manualAltSchedules = {}) {
   // const STEP = 5
   // const hEditor = document.getElementById('h-editor')
   // document.getElementById('edit-h').addEventListener('click', e => {
-  //   hEditor.classList.add('show')
+  //   showDialog(hEditor)
   // })
   // const hDays = document.createDocumentFragment()
   // for (let day = 1; day <= 5; day++) {

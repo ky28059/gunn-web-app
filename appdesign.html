@@ -148,10 +148,16 @@
       import { setCurrentTime } from './js/utils.js'
       // setCurrentTime(() => new Date(2020, 2, 10, 13, 23).getTime())
       // setCurrentTime(() => Date.now() + 1000 * 60 * 60 * 24 * 4.7)
-      // setCurrentTime(() => {
-      //   const temp = new Date(2020, 2, 10, 13, 23).getTime()
-      //   return (Date.now() - temp) * 1000 + temp
-      // })
+
+      /*
+      const start = Date.now()
+      const baseTime = new Date(2020, 8, 8, 12, 0).getTime()
+      // const baseTime = new Date().getTime()
+      const speed = 100
+      setCurrentTime(() => {
+        return (Date.now() - start) * speed + baseTime
+      })
+      //*/
       window.setCurrentTime = setCurrentTime
 
       const betaBadge = document.createElement('span')
@@ -177,34 +183,6 @@
       `
     </script>
     <!-- /NOAPPDESIGN -->
-
-    <!-- TEMP for school closure -->
-    <div class="coronavirus-cover coronavirus-ended" id="coronavirus-window">
-      <div class="coronavirus-mask">
-        <div class="coronavirus-content">
-          <h1 class="coronavirus-heading" data-l10n="coronavirus-heading"></h1>
-          <p data-l10n="coronavirus-subtitle"></p>
-          <div class="coronavirus-links">
-            <a
-              class="material ripple-light"
-              href="https://www.pausd.org/explore-pausd/news/categories/coronavirus"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-l10n="coronavirus-pausd"
-            ></a>
-          </div>
-          <button
-            class="material"
-            id="close-coronavirus"
-            data-l10n="close"
-          ></button>
-        </div>
-        <div class="mask-strap strap-i"></div>
-        <div class="mask-strap strap-ii"></div>
-        <div class="mask-strap strap-iii"></div>
-        <div class="mask-strap strap-iv"></div>
-      </div>
-    </div>
 
     <div id="footer">
       <ul>
@@ -367,15 +345,11 @@
     </div>
 
     <div class="section clubs" id="section-club">
-      <h1>
+      <h1 class="header-with-search">
         <span data-l10n="club-list"></span>
         <div class="search-wrapper">
           <i class="material-icons">&#xE8B6;</i>
-          <input
-            type="search"
-            placeholder="Search clubs"
-            class="notmaterial-input search-input"
-          />
+          <div class="search-input"></div>
           <button class="material icon clear-btn">
             <i class="material-icons">&#xe14c;</i>
           </button>
@@ -419,7 +393,9 @@
         </button>
       </p>
       <p class="center get-error" id="alternateerror"></p>
-      <div id="schedulewrapper"></div>
+      <div id="schedulewrapper">
+        <div id="swipe-preview" class="schedule-container"></div>
+      </div>
 
       <div id="weekwrapper"></div>
 
@@ -429,15 +405,11 @@
     </div>
 
     <div class="section staff" id="section-staff">
-      <h1>
+      <h1 class="header-with-search">
         <span data-l10n="staff-list"></span>
         <div class="search-wrapper">
           <i class="material-icons">&#xE8B6;</i>
-          <input
-            type="search"
-            placeholder="Search staff"
-            class="notmaterial-input search-input"
-          />
+          <div class="search-input"></div>
           <button class="material icon clear-btn">
             <i class="material-icons">&#xe14c;</i>
           </button>
@@ -445,7 +417,7 @@
       </h1>
       <p data-l10n="staff-disclaimer">
         <a
-          href="https://gunn.pausd.org/connect/staff-directory"
+          href="https://gunn.pausd.org/connecting/staff-directory/"
           target="_blank"
           rel="noopener noreferrer"
           data-l10n-arg="link"
@@ -553,6 +525,13 @@
           <label data-l10n="numbers"></label>
         </p>
       </div>
+      <p data-l10n="notif-time-before">
+        <span
+          class="material-dropdown"
+          id="notif-time-before"
+          data-l10n-arg="time"
+        ></span>
+      </p>
       <div class="center">
         <button
           class="material ripple-light raised"
@@ -561,9 +540,23 @@
         ></button>
       </div>
 
-      <h1 data-l10n="periods"></h1>
-      <p data-l10n="periods-desc"></p>
+      <div class="periods-customisation-heading">
+        <h1 data-l10n="periods"></h1>
+        <p data-l10n="periods-desc"></p>
+      </div>
       <a id="periodcustomisermarker"></a>
+      <p>
+        <label>
+          <span class="material-switch" id="hide-preps" tabindex="0"></span>
+          <span data-l10n="hide-preps"></span>
+        </label>
+      </p>
+      <p>
+        <label>
+          <span class="material-switch" id="allow-swipe" tabindex="0"></span>
+          <span data-l10n="allow-swipe"></span>
+        </label>
+      </p>
       <!-- <p>
         <label>
           <span class="material-switch" id="self" tabindex="0"></span>
@@ -578,17 +571,25 @@
       </p>
       <p>
         <label>
-          <span class="material-switch" id="hide-preps" tabindex="0"></span>
-          <span data-l10n="hide-preps"></span>
-        </label>
-      </p>
-      <p>
-        <label>
           <span class="material-switch" id="show-h" tabindex="0"></span>
           <span data-l10n="show-h"></span>
         </label>
       </p>
       <!-- <button class="material raised" id="edit-h" data-l10n="edit-h"></button> -->
+      <p data-l10n="open-link-before">
+        <span
+          class="material-dropdown"
+          id="link-time-before"
+          data-l10n-arg="time"
+        ></span>
+        <strong data-l10n-arg="emphasis"></strong>
+      </p>
+      <p>
+        <label>
+          <span class="material-switch" id="use-iframe" tabindex="0"></span>
+          <span data-l10n="use-iframe"></span>
+        </label>
+      </p>
 
       <h1 data-l10n="assignments"></h1>
       <p>
@@ -821,10 +822,22 @@
             data-l10n-arg="tga-android"
           ></a>
           <a
-            href="https://nugwa.sord.cf/"
+            href="https://kach.github.io/bellhop/"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-l10n-arg="bellhop"
+          ></a>
+          <a
+            href="https://sordamente.github.io/nugwa/"
             target="_blank"
             rel="noopener noreferrer"
             data-l10n-arg="nugwa"
+          ></a>
+          <a
+            href="https://homeworkcentral.web.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-l10n-arg="hw-central"
           ></a>
         </p>
 
@@ -896,6 +909,11 @@
           class="material ripple-light raised"
           id="trick-cache"
           data-l10n="trick-cache"
+        ></button>
+        <button
+          class="material ripple-light raised"
+          id="kill-sw"
+          data-l10n="kill-sw"
         ></button>
       </p>
 
@@ -971,6 +989,18 @@
     <div id="h-editor" class="material-dialog">
       <h1 data-l10n="h-editor"></h1>
       <div class="content" id="h-days"></div>
+      <div class="buttons">
+        <button class="material red close" data-l10n="ok"></button>
+      </div>
+    </div>
+
+    <div id="iframe-window" class="material-dialog">
+      <h1>
+        <a id="iframe-title" target="_blank" rel="noopener noreferrer"
+          ><i class="material-icons">&#xe89e;</i></a
+        >
+      </h1>
+      <iframe class="content" id="iframe"></iframe>
       <div class="buttons">
         <button class="material red close" data-l10n="ok"></button>
       </div>

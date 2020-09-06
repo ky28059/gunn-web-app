@@ -1,6 +1,8 @@
+/* global Notification */
+
 import { localize, localizeWith } from '../js/l10n.js'
 import { savedClubs } from '../js/saved-clubs.js'
-import { escapeHTML, now } from '../js/utils.js'
+import { currentTime, escapeHTML, now } from '../js/utils.js'
 
 export let days, months
 export function setDaysMonths (newDays, newMonths) {
@@ -46,6 +48,50 @@ export function scheduleApp (options = {}) {
         hr < 12 ? 'a' : 'p'
       }m`
   }
+  const periodSymbols = {
+    Brunch: localize('symbols/brunch'),
+    Lunch: localize('symbols/lunch'),
+    Flex: localize('symbols/flex'),
+    SELF: localize('symbols/self'),
+    A: localize('symbols/period-a'),
+    B: localize('symbols/period-b'),
+    C: localize('symbols/period-c'),
+    D: localize('symbols/period-d'),
+    E: localize('symbols/period-e'),
+    F: localize('symbols/period-f'),
+    G: localize('symbols/period-g'),
+    H: localize('symbols/period-h'),
+    '0': localize('symbols/period-zero'),
+    GT: '?'
+  }
+  const ICON_SIZE = 256
+  const ICON_FONT = '"Roboto", sans-serif'
+  const ICON_PADDING = 0.2
+  const maxSize = ICON_SIZE * (1 - 2 * ICON_PADDING)
+  const iconCanvas = document.createElement('canvas')
+  const iconCtx = iconCanvas.getContext('2d')
+  iconCanvas.width = ICON_SIZE
+  iconCanvas.height = ICON_SIZE
+  iconCtx.textAlign = 'center'
+  iconCtx.textBaseline = 'middle'
+  function getIcon (period) {
+    const { colour, label } = getPeriod(period)
+    if (colour[0] === '#') {
+      iconCtx.fillStyle = colour
+      iconCtx.fillRect(0, 0, ICON_SIZE, ICON_SIZE)
+      iconCtx.fillStyle = getFontColour(colour)
+    } else {
+      return `./.period-images/${period}?${colour}`
+    }
+    const text = periodSymbols[period] || label
+    iconCtx.font = `${maxSize}px ${ICON_FONT}`
+    const { width } = iconCtx.measureText(text)
+    const fontSize = Math.min((maxSize * maxSize) / width, maxSize)
+    iconCtx.font = `${fontSize}px ${ICON_FONT}`
+    // It is annoying having to do fontSize * 0.1 so it looks vertically centred
+    iconCtx.fillText(text, ICON_SIZE / 2, ICON_SIZE / 2 + fontSize * 0.1)
+    return iconCanvas.toDataURL()
+  }
   function getCSS (colour, id) {
     if (colour[0] === '#') {
       return `background-color:${colour};color:${getFontColour(colour)};`
@@ -61,6 +107,11 @@ export function scheduleApp (options = {}) {
     else return localizeWith('duration', 'times', { T: minutes })
   }
   function getPeriodSpan (period) {
+    if (period === 'GT') {
+      return `<span class="schedule-endinginperiod gt-confuse">${localize(
+        'gunn-together/name'
+      )}</span>`
+    }
     return `<span style="${getCSS(
       getPeriod(period).colour,
       period
@@ -88,10 +139,17 @@ export function scheduleApp (options = {}) {
     let summer = false
     const isSELF = isSELFDay(mez, dia)
     let periods
+    // For Gunn Together period resolution (see below)
+    const gtWeek = Math.floor(
+      (d - new Date(2020, 8 - 1, 17)) / 1000 / 60 / 60 / 24 / 7
+    )
+    // Don't touch this function because it's reimplemented under getWeek and
+    // maybe elsewhere for some reason >_<
     function getPeriodName (index) {
-      return periods[index].name === 'Flex' && isSELF
-        ? 'SELF'
-        : periods[index].name
+      if (periods[index].name === 'Flex' && isSELF) {
+        return 'SELF'
+      }
+      return periods[index].name
     }
     if (options.customSchedule) {
       periods = options.customSchedule(d, ano, mez, dia, weekday)
@@ -151,7 +209,14 @@ export function scheduleApp (options = {}) {
       )
     }
     return {
-      periods,
+      periods: periods.map(period => {
+        if (period.name === 'GT') {
+          if (gtWeek >= 0 && gtWeek < 2) {
+            return { ...period, name: 'E', gunnTogether: true }
+          }
+        }
+        return period
+      }),
       alternate,
       summer,
       getPeriodName,
@@ -192,23 +257,34 @@ export function scheduleApp (options = {}) {
         `<span class="schedule-noschool">${localize('summer')}</span>`
       )
     if (alternate) {
-      innerHTML += `<span class="schedule-alternatemsg">${localize(
-        'before-alt-msg'
-      )}<strong>${alternate.description}</strong>${localize(
-        'after-alt-msg'
+      innerHTML += `<span class="schedule-alternatemsg">${localizeWith(
+        'alt-msg',
+        'other',
+        { D: `<strong>${alternate.description}</strong>` }
       )}</span>`
     }
     if (periods.length) {
-      innerHTML += `<span class="schedule-end">${localizeWith(
-        'end-time',
-        'times',
-        {
-          T: `<strong>${getHumanTime(
-            ('0' + periods[periods.length - 1].end.hour).slice(-2) +
-              ('0' + periods[periods.length - 1].end.minute).slice(-2)
-          )}</strong>`
-        }
-      )}</span>`
+      // If a day ends in an optional period, don't count it.
+      // 'Flex' is temporarily in the list because it's kind of optional this
+      // year.
+      const optionalPeriods = ['Lunch', 'Brunch', 'Flex']
+      const [lastRequiredPeriod] = periods
+        .filter(({ name }) => !optionalPeriods.includes(name))
+        .slice(-1)
+      if (lastRequiredPeriod) {
+        innerHTML += `<span class="schedule-end">${localizeWith(
+          'end-time',
+          'times',
+          {
+            T: `<strong>${getHumanTime(
+              ('0' + lastRequiredPeriod.end.hour).slice(-2) +
+                ('0' + lastRequiredPeriod.end.minute).slice(-2)
+            )}</strong>`
+          }
+        )}</span>`
+      }
+      // QUESTION: Should there be feedback for days with only optional periods?
+      // Later QUESTION: What did I mean by "feedback"??
       if (checkfuture) {
         let i
         for (i = 0; i < periods.length; i++)
@@ -276,16 +352,35 @@ export function scheduleApp (options = {}) {
         const periodName = getPeriod(
           period.name === 'Flex' && isSELF ? 'SELF' : period.name
         )
-        innerHTML += `<div class="schedule-period" style="${getCSS(
-          periodName.colour,
-          period.name
-        )}"><span class="schedule-periodname">${escapeHTML(periodName.label)}${
-          options.displayAddAsgn
-            ? `<button class="material add-asgn" data-pd="${
-                period.name
-              }">${localize('add-asgn')}</button>`
-            : ''
-        }</span><span>${getHumanTime(
+        innerHTML += `<div class="schedule-period ${
+          period.name === 'GT' ? 'gunn-together' : ''
+        }" style="${getCSS(periodName.colour, period.name)}">`
+        if (period.name !== 'GT') {
+          innerHTML += `<span class="schedule-periodname">${escapeHTML(
+            periodName.label
+          )}<span class="pd-btns">${
+            options.displayAddAsgn
+              ? `<button class="material icon pd-btn add-asgn" data-pd="${
+                  period.name
+                }" title="${localize(
+                  'add-asgn'
+                )}"><i class="material-icons">add_task</i></button>`
+              : ''
+          }${
+            periodName.link
+              ? `<a class="material icon pd-btn" target="_blank" href="${periodName.link}" rel="noopener noreferrer"><i class="material-icons">\ue89e</i></a>`
+              : ''
+          }</span></span>`
+        }
+        if (period.gunnTogether || period.name === 'GT') {
+          innerHTML += `<div class="gunn-together-badge">${localize(
+            'gunn-together/name'
+          )}</div>`
+        }
+        if (period.name === 'GT') {
+          innerHTML += `<span>${localize('gunn-together/subtitle')}</span>`
+        }
+        innerHTML += `<span>${getHumanTime(
           ('0' + period.start.hour).slice(-2) +
             ('0' + period.start.minute).slice(-2)
         )} &ndash; ${getHumanTime(
@@ -342,10 +437,11 @@ export function scheduleApp (options = {}) {
         }
         innerHTML += `</div>`
       }
-    } else
+    } else {
       innerHTML += `<span class="schedule-noschool">${
         getPeriod('NO_SCHOOL').label
       }</span>`
+    }
     return innerHTML
   }
   if (!options.offset) options.offset = 0
@@ -362,11 +458,63 @@ export function scheduleApp (options = {}) {
     window.removeEventListener('blur', onBlur, false)
   }
   window.addEventListener('blur', onBlur, false)
+  function getDate (date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  }
+  function getNext (timeOk, { start = true, end = true } = {}) {
+    const today = getDate(now())
+    const schedule = getSchedule(today)
+    // Use seconds as common unit for these things
+    const time = (currentTime() - today.getTime()) / 1000
+    for (const period of schedule.periods) {
+      if (start && timeOk(period.start.totalminutes * 60, time, period.name)) {
+        return {
+          period: period.name,
+          time: period.start.totalminutes * 60 * 1000 + today.getTime(),
+          type: 'start'
+        }
+      }
+      if (end && timeOk(period.end.totalminutes * 60, time, period.name)) {
+        return {
+          period: period.name,
+          time: period.end.totalminutes * 60 * 1000 + today.getTime(),
+          type: 'end'
+        }
+      }
+    }
+    return null
+  }
+  function getNextNotif () {
+    const { timeBefore } = options.notifSettings
+    const next = getNext((pdTime, nowTime) => pdTime - timeBefore > nowTime)
+    return (
+      next && {
+        showTime: next.time - timeBefore * 1000,
+        link: next.type === 'start'
+      }
+    )
+  }
+  function getNextLinkOpen () {
+    if (options.openLinkBefore !== null) {
+      const next = getNext(
+        (pdTime, nowTime, pdName) =>
+          getPeriod(pdName).link && pdTime - options.openLinkBefore > nowTime,
+        { end: false }
+      )
+      if (next) {
+        return { ...next, time: next.time - options.openLinkBefore * 1000 }
+      }
+    }
+    return null
+  }
+  let nextNotif = null
+  let nextLinkOpen = null
   const checkSpeed = 50 // Every 50 ms
   let lastMinute, timeoutID, animationID
   const returnval = {
     options,
     element: elem,
+    container,
     render () {
       container.innerHTML = generateDay(options.offset)
     },
@@ -385,11 +533,87 @@ export function scheduleApp (options = {}) {
         if (currentMinute !== lastMinute) {
           returnval.render()
           lastMinute = currentMinute
+          if (options.notifSettings.enabled && !nextNotif) {
+            // Try getting next notification
+            nextNotif = getNextNotif()
+          }
+          if (options.openLinkBefore !== null && !nextLinkOpen) {
+            // Try getting next notification
+            nextLinkOpen = getNextLinkOpen()
+          }
         }
         if (options.update) {
           timeoutID = setTimeout(checkMinute, checkSpeed)
         } else {
           animationID = null
+        }
+        if (nextNotif) {
+          if (currentTime() >= nextNotif.showTime) {
+            const today = getDate(now())
+            const currentMinute = (currentTime() - today.getTime()) / 1000 / 60
+            // Apparently getPeriodName gets the period type even though it's
+            // already in `periods[index].name` in order to deal with SELF
+            // becoming flex even though this could've been dealt with in
+            // getSchedule before returning the schedule??
+            const { periods, getPeriodName } = getSchedule(today)
+            const currentPeriod = periods.findIndex(
+              period => currentMinute < period.end.totalminutes
+            )
+            const { label, link } =
+              currentPeriod !== -1
+                ? getPeriod(getPeriodName(currentPeriod))
+                : {}
+            const text =
+              currentPeriod === -1
+                ? localize('over', 'times')
+                : currentMinute < periods[currentPeriod].start.totalminutes
+                ? localizeWith('starting', 'times', {
+                    P: label,
+                    T: getUsefulTimePhrase(
+                      Math.ceil(
+                        periods[currentPeriod].start.totalminutes -
+                          currentMinute
+                      )
+                    )
+                  })
+                : localizeWith('ending', 'times', {
+                    P: label,
+                    T: getUsefulTimePhrase(
+                      Math.ceil(
+                        periods[currentPeriod].end.totalminutes - currentMinute
+                      )
+                    )
+                  })
+            const openLink = nextNotif.link && link
+            const notification = new Notification(text, {
+              icon:
+                currentPeriod === -1
+                  ? null
+                  : getIcon(getPeriodName(currentPeriod)),
+              body: openLink ? localize('notif-click-desc') : ''
+            })
+            notification.addEventListener('click', e => {
+              e.preventDefault()
+              if (openLink) {
+                const win = window.open(link, '_blank')
+                win.focus()
+              }
+            })
+
+            nextNotif = getNextNotif()
+          }
+        }
+        if (nextLinkOpen) {
+          if (currentTime() >= nextLinkOpen.time) {
+            if (options.openLinkInIframe) {
+              const { link, label } = getPeriod(nextLinkOpen.period)
+              options.openLinkInIframe(link, label)
+            } else {
+              // https://stackoverflow.com/a/11384018
+              window.open(getPeriod(nextLinkOpen.period).link, '_blank')
+            }
+            nextLinkOpen = getNextLinkOpen()
+          }
         }
       }
       timeoutID = setTimeout(checkMinute, checkSpeed)
@@ -405,9 +629,10 @@ export function scheduleApp (options = {}) {
       options.offset = o
       if (options.autorender) returnval.render()
     },
-    setPeriod (id, name, colour, update) {
-      if (name) options.periods[id].label = name
-      if (colour) options.periods[id].colour = colour
+    setPeriod (id, { name, colour, link }, update) {
+      if (name !== undefined) options.periods[id].label = name
+      if (colour !== undefined) options.periods[id].colour = colour
+      if (link !== undefined) options.periods[id].link = link
       if (update) {
         returnval.render()
       }
@@ -440,12 +665,20 @@ export function scheduleApp (options = {}) {
             day.push(q)
           }
         if (today.getDay() === i) day.today = true
+        day.date = d
         week.push(day)
       }
       return week
     },
+    updateNextNotif () {
+      nextNotif = options.notifSettings.enabled ? getNextNotif() : null
+    },
+    updateNextLinkOpen () {
+      nextNotif = getNextLinkOpen()
+    },
     getPeriodSpan,
-    getSchedule
+    getSchedule,
+    generateHtmlForOffset: generateDay
   }
   elem.appendChild(container)
   generateDay() // Calculate endOfDay, but don't render the HTML yet

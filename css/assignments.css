@@ -38,17 +38,23 @@ button.material.icon.asgn-done-btn {
 .asgn-text {
   cursor: pointer;
   font-size: 16px;
+  word-break: break-word;
 }
 .asgn-is-done {
-  text-decoration: line-through;
   opacity: 0.5;
+}
+.asgn-is-done > span {
+  text-decoration: line-through;
 }
 .asgn-upcoming .asgn-is-done button.material.icon.asgn-done-btn {
   color: var(--theme);
 }
-.asgn-text:hover,
-.tab-focus .asgn-text:focus {
+.asgn-edit:hover .asgn-text,
+.tab-focus .asgn-edit:focus .asgn-text {
   text-decoration: underline;
+}
+.tab-focus .asgn-edit:focus {
+  box-shadow: 0 0 0 5px var(--focus);
 }
 .asgn-due,
 .asgn-overdue {
@@ -131,22 +137,11 @@ button.material.icon.asgn-done-btn {
 }
 
 /* ADD ASSIGNMENT BUTTONS */
-button.add-asgn {
+.asgn-upcoming .add-asgn {
   float: right;
-  color: inherit;
-  text-shadow: inherit;
 }
 .add-asgn i {
   pointer-events: none;
-}
-.schedule-container button.add-asgn {
-  opacity: 0;
-  pointer-events: none;
-  transition: all 0.2s;
-}
-.schedule-container .schedule-period:hover .add-asgn {
-  opacity: 1;
-  pointer-events: all;
 }
 
 /* EDITOR */
@@ -197,7 +192,7 @@ button.add-asgn {
   padding: 5px 10px;
   font-size: 14px;
   transition: opacity 0.2s, background-color 0.2s;
-  z-index: 7;
+  z-index: 30;
 }
 .assync-disappearing {
   animation: fade-out 0.5s 2s forwards;

@@ -2,11 +2,12 @@
 
 /**
  * URL params
- * @param {section.js} section - the section to be viewed
- * @param {lists.js} club-search - default search content in club search bar
- * @param {lists.js} staff-search - deault search content in staff search bar
- * @param {schedule.js} date - the date whose schedule is to be viewed
- * @param {barcodes.js} barcode - the barcode to display
+ * @param {section} section.js - the section to be viewed
+ * @param {club-search} lists.js - default search content in club search bar
+ * @param {staff-search} lists.js - deault search content in staff search bar
+ * @param {date} schedule.js - the date whose schedule is to be viewed
+ * @param {barcode} barcodes.js - the barcode to display
+ * @param {all-langs} l10n.js - show all test and WIP languages
  */
 
 // ?for=appdesign so that Ugwita cache doesn't conflict
@@ -19,6 +20,7 @@ import {
   currentLang,
   localize,
   localizeHtml,
+  localizeWith,
   publicLangs,
   ready as l10nReady
 } from './l10n.js'
@@ -33,13 +35,16 @@ import {
 import { zoomImage } from '../touchy/rotate1.js'
 import {
   ALT_KEY,
+  closeDialog,
   cookie,
   currentTime,
   firstDay,
+  googleCalendarId,
   LAST_YEARS_ALT_KEY,
   lastDay,
   logError,
   now,
+  showDialog,
   toEach
 } from './utils.js'
 
@@ -66,7 +71,7 @@ window.initMap = initMap
 // BEGIN MASSIVE PASTE FROM UGWITA
 const calendarURL =
   'https://www.googleapis.com/calendar/v3/calendars/' +
-  encodeURIComponent('u5mgb2vlddfj70d7frf3r015h0@group.calendar.google.com') +
+  googleCalendarId +
   '/events?singleEvents=true&fields=' +
   encodeURIComponent(
     'items(description,end(date,dateTime),start(date,dateTime),summary)'
@@ -78,6 +83,7 @@ const keywords = [
   'extended',
   'holiday',
   'no students',
+  'no school',
   'break',
   'development'
 ]
@@ -148,7 +154,14 @@ function main () {
   }
   setDaysMonths(localize('days').split('  '), localize('months').split('  '))
   // Do things that make the app visually change to the user first
-  attemptFns([setTheme, localizePage, initErrorLog, initFooter, showIOSDialog])
+  attemptFns([
+    setTheme,
+    localizePage,
+    initPWA,
+    initErrorLog,
+    initFooter,
+    showIOSDialog
+  ])
   // Allow page to render the localization (seems to require two animation
   // frames for some reason?)
   window.requestAnimationFrame(() => {
@@ -164,8 +177,7 @@ function main () {
         initGradeCalc,
         initSaveCodeManager,
         initMaps,
-        initChat,
-        initCoronavirusClose
+        initChat
       ])
       try {
         initScheduleWhenReady()
@@ -191,22 +203,11 @@ function attemptFns (fns) {
   }
 }
 
-// TEMP for school closure
-function initCoronavirusClose () {
-  const wrapper = document.getElementById('coronavirus-window')
-  const closeBtn = document.getElementById('close-coronavirus')
-  wrapper.addEventListener('click', e => {
-    if (e.target === wrapper || e.target === closeBtn) {
-      document.body.removeChild(wrapper)
-    }
-  })
-  // wrapper.classList.remove('coronavirus-ended')
-}
-
 function initScheduleWhenReady () {
-  return Promise.all([getManualAlternateSchedules(), schedulesReady]).then(
-    ([schedules]) => initSchedule(schedules)
-  )
+  const manualAltSchedulesProm = getManualAlternateSchedules()
+  return schedulesReady.then(() => {
+    initSchedule(manualAltSchedulesProm)
+  })
 }
 
 function makeNavBarRipple () {
@@ -219,6 +220,8 @@ function initTabfocus () {
     if (e.keyCode === 9 || e.keyCode === 13) {
       document.body.classList.add('tab-focus')
       tabFocus = true
+    } else if (e.keyCode === 27) {
+      closeDialog()
     }
   })
   document.addEventListener('keyup', e => {
@@ -316,10 +319,9 @@ function initPSA () {
         ).then(html => {
           if (currentPsa === id) {
             const [year, month, date] = psaData[id].split('-').map(Number)
-            const dateStr = localize('psa-date').replace(
-              '{D}',
-              new Date(year, month - 1, date).toLocaleDateString()
-            )
+            const dateStr = localizeWith('psa-date', 'other', {
+              D: new Date(year, month - 1, date).toLocaleDateString()
+            })
             psaContent.innerHTML = html + `<p class="psa-date">${dateStr}</p>`
             newBadge.style.display = currentPsa > lastRead ? 'inline' : null
             if (currentPsa > lastRead) {
@@ -365,19 +367,18 @@ function initGradeCalc () {
     const result =
       Math.round(((minimum - current * (1 - worth)) / worth) * 10000) / 100
     if (result <= 0) {
-      gradeCalc.output.innerHTML = `${localize(
-        'no-study-before-emph'
-      )}<strong>${localize('no-study-emph')}</strong>${localize(
-        'no-study-after-emph'
-      )}`
+      gradeCalc.output.innerHTML = localizeWith('no-study', 'other', {
+        E: `<strong>${localize('no-study-emph')}</strong>`
+      })
     } else if (worth === 0 || isNaN(result)) {
       gradeCalc.output.innerHTML = localize('zero-error')
     } else {
-      gradeCalc.output.innerHTML = `${localize(
-        'minscore-before-emph'
-      )}<strong>${result}%</strong>${localize('minscore-after-emph')}`
-      if (result > 100)
+      gradeCalc.output.innerHTML = localizeWith('minscore', 'other', {
+        S: `<strong>${result}%</strong>`
+      })
+      if (result > 100) {
         gradeCalc.output.innerHTML += localize('minscore-too-high-addendum')
+      }
     }
   }
   setOutput()
@@ -462,6 +463,13 @@ function initControlCentre () {
   })
   document.getElementById('trick-cache').addEventListener('click', e => {
     window.location = '?' + currentTime()
+  })
+  document.getElementById('kill-sw').addEventListener('click', e => {
+    navigator.serviceWorker.getRegistrations().then(regis =>
+      regis.map(regis => {
+        if (regis.scope.includes('gunn-web-app')) return regis.unregister()
+      })
+    )
   })
 }
 
@@ -709,7 +717,7 @@ function showIOSDialog () {
     !cookie.getItem('[gunn-web-app] no-thx-ios')
   ) {
     const theThing = document.getElementById('ios-add-to-home-screen')
-    theThing.classList.add('show')
+    showDialog(theThing)
     if (!ua.includes('Version/')) theThing.classList.add('not-ios-safari')
     if (ua.includes('iPad')) theThing.classList.add('ipad')
     document.getElementById('ios-no-thanks').addEventListener('click', e => {
@@ -798,6 +806,10 @@ function localizePage () {
     const extraArgs = Object.keys(l10nArgs)
     if (extraArgs.length) {
       console.warn('Extra l10n arguments found for', l10nStr, ':', extraArgs)
+      // Prevent errors by adding back the extra arguments to DOM
+      for (const elem of Object.values(l10nArgs)) {
+        node.appendChild(elem)
+      }
     }
   }
   function applyL10nToNode (node) {
@@ -834,6 +846,10 @@ function localizePage () {
     fragment.appendChild(p)
   })
   document.getElementById('langs').appendChild(fragment)
+}
+
+function initPWA () {
+  const lastPsa = cookie.getItem('[gunn-web-app] scheduleapp.psa')
   try {
     navigator.serviceWorker.register('./sw.js').then(
       regis => {
@@ -844,6 +860,10 @@ function localizePage () {
               installingWorker.state === 'installed' &&
               navigator.serviceWorker.controller
             ) {
+              // Un-mark the last PSA as read if it has just been read because
+              // the user may have just loaded UGWA
+              cookie.setItem('[gunn-web-app] scheduleapp.psa', lastPsa)
+
               console.log('New update! Redirecting you away and back')
               window.location.replace(
                 '/ugwa-updater.html' + window.location.search

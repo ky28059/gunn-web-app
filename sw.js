@@ -1,6 +1,6 @@
 /* eslint-env serviceworker */
 
-const CACHE_NAME = 'ugwa-sw-1597351048472'
+const CACHE_NAME = 'ugwa-sw-1599355634811'
 const urlsToCache = [
   './',
   'images/newmap.min.png',
@@ -25,8 +25,7 @@ const urlsToCache = [
   'js/languages/en-gt-core.js',
   'js/languages/fr.js',
   'json/alt-schedules-2020.txt',
-  // TEMP for school closure
-  'images/false-sense-of-security.svg'
+  'images/gunn-together.svg'
 ]
 
 function sendError (msg) {
@@ -47,7 +46,9 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     caches
       .match(e.request, {
-        // ignoreSearch: !e.request.url.includes('fonts.googleapis.com')
+        ignoreSearch: new URL(e.request.url).pathname.startsWith(
+          '/gunn-web-app/.period-images/'
+        )
       })
       .then(response => response || fetch(e.request))
   )

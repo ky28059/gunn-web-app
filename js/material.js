@@ -1,4 +1,4 @@
-import { currentTime, NADA, toEach } from './utils.js'
+import { closeDialog, currentTime, NADA, toEach } from './utils.js'
 
 export function ripple (elem) {
   if (typeof elem === 'string') {
@@ -71,19 +71,101 @@ export function ripple (elem) {
     elem.removeChild(focusblob);
   },false); */
 }
+export function materialInput (
+  labeltext,
+  type = 'text',
+  ariaLabel = labeltext
+) {
+  const inputwrapper = document.createElement('div')
+  const label = document.createElement('label')
+  const input = document.createElement('input')
+  const line = document.createElement('div')
+  inputwrapper.classList.add('customiser-inputwrapper')
+  label.classList.add('customiser-label')
+  label.innerHTML = labeltext
+  input.classList.add('customiser-input')
+  input.type = type
+  input.setAttribute('aria-label', ariaLabel)
+  input.addEventListener(
+    'change',
+    e => {
+      if (input.value) inputwrapper.classList.add('filled')
+      else inputwrapper.classList.remove('filled')
+    },
+    false
+  )
+  input.addEventListener(
+    'mouseenter',
+    e => {
+      inputwrapper.classList.add('hover')
+    },
+    false
+  )
+  input.addEventListener(
+    'mouseleave',
+    e => {
+      inputwrapper.classList.remove('hover')
+    },
+    false
+  )
+  input.addEventListener(
+    'focus',
+    e => {
+      inputwrapper.classList.add('focus')
+    },
+    false
+  )
+  input.addEventListener(
+    'blur',
+    e => {
+      inputwrapper.classList.remove('focus')
+    },
+    false
+  )
+  line.classList.add('customiser-line')
+  inputwrapper.appendChild(label)
+  inputwrapper.appendChild(input)
+  inputwrapper.appendChild(line)
+  return {
+    wrapper: inputwrapper,
+    label: label,
+    input: input,
+    line: line,
+    get disabled () {
+      return input.disabled
+    },
+    set disabled (disabled) {
+      input.disabled = disabled
+      if (disabled) {
+        inputwrapper.classList.add('input-disabled')
+      } else {
+        inputwrapper.classList.remove('input-disabled')
+      }
+    }
+  }
+}
 export function makeDropdown (wrapper, values) {
   const selectDisplay = document.createElement('span')
   selectDisplay.classList.add('mdrop-selected')
   selectDisplay.tabIndex = 0
   ripple(selectDisplay)
+  const actualSelectDisplay = document.createElement('span')
+  selectDisplay.appendChild(actualSelectDisplay)
+  selectDisplay.appendChild(
+    Object.assign(document.createElement('i'), {
+      className: 'material-icons mdrop-arrow',
+      textContent: '\ue5c5'
+    })
+  )
   wrapper.appendChild(selectDisplay)
   const dropdown = document.createElement('div')
   dropdown.classList.add('mdrop-values')
-  const valuesByVal = {}
-  values.forEach(([valText, elem]) => {
+  dropdown.classList.add('show')
+  let dropdownAdded = false
+  const valuesByIndex = values.map(([valText, elem], i) => {
     const value = document.createElement('div')
     value.classList.add('mdrop-value')
-    value.dataset.value = valText
+    value.dataset.value = i
     value.tabIndex = 0
     ripple(value)
     if (typeof elem === 'string') {
@@ -92,17 +174,21 @@ export function makeDropdown (wrapper, values) {
       elem = temp
     }
     value.appendChild(elem)
-    valuesByVal[valText] = elem
     dropdown.appendChild(value)
+    return elem
   })
-  wrapper.appendChild(dropdown)
-  selectDisplay.innerHTML = valuesByVal[values[0][0]].outerHTML
   function close () {
     dropdown.classList.remove('show')
     document.removeEventListener('click', close)
   }
   selectDisplay.addEventListener('click', e => {
     dropdown.classList.add('show')
+    if (dropdownAdded) {
+      dropdown.classList.add('show')
+    } else {
+      wrapper.appendChild(dropdown)
+      dropdownAdded = true
+    }
     document.addEventListener('click', close)
     e.stopPropagation()
   })
@@ -110,15 +196,19 @@ export function makeDropdown (wrapper, values) {
   dropdown.addEventListener('click', e => {
     const value = e.target.closest('.mdrop-value')
     if (value) {
-      selected = value.dataset.value
-      selectDisplay.innerHTML = valuesByVal[selected].outerHTML
+      selected = values[value.dataset.value][0]
+      actualSelectDisplay.innerHTML =
+        valuesByIndex[value.dataset.value].outerHTML
       if (onchange) onchange(selected)
     }
   })
   return {
     set (to) {
-      selected = to
-      selectDisplay.innerHTML = valuesByVal[selected].outerHTML
+      const index = values.findIndex(pair => pair[0] === to)
+      if (index !== -1) {
+        selected = to
+        actualSelectDisplay.innerHTML = valuesByIndex[index].outerHTML
+      }
       return this
     },
     get () {
@@ -277,13 +367,7 @@ window.addEventListener(
       )
     })
     toEach('.material-dialog > .buttons > .close', t => {
-      t.addEventListener(
-        'click',
-        e => {
-          t.parentNode.parentNode.classList.remove('show')
-        },
-        false
-      )
+      t.addEventListener('click', closeDialog)
     })
   },
   false

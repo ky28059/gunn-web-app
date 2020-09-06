@@ -1,7 +1,8 @@
-import { cookie } from './utils.js'
+import { cookie, isAppDesign } from './utils.js'
 import en from './languages/en.js'
 
 const langs = { en }
+window.langs = langs
 
 export const availableLangs = {
   en: 'English',
@@ -26,19 +27,20 @@ if (!availableLangs[cookie.getItem('[gunn-web-app] language')]) {
 }
 export const currentLang = cookie.getItem('[gunn-web-app] language')
 export function localize (id, src = 'other', lang = currentLang) {
-  if (!langs[currentLang]) {
-    console.warn(`Language ${currentLang} not loaded.`)
-    langs[currentLang] = {}
+  if (!langs[lang]) {
+    console.warn(`Language ${lang} not loaded.`)
+    langs[lang] = {}
   }
   const path = [src, ...id.split('/')]
-  let obj = langs[currentLang]
+  let obj = langs[lang]
   for (const key of path) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       obj = obj[key]
     } else if (lang === 'en') {
-      console.warn(`Nothing set for ${src}/${id}`)
+      console.warn(`Nothing set for en/${src}/${id}`)
       return id
     } else {
+      console.warn(`Nothing set for ${lang}/${src}/${id}`)
       return localize(id, src, 'en')
     }
   }
@@ -60,11 +62,13 @@ export function localizeHtml (id) {
   return localize(id, 'html')
 }
 function loadLanguage (langCode) {
-  return import(new URL(`./js/languages/${langCode}.js`, window.location)).then(
-    ({ default: langData }) => {
-      langs[langCode] = langData
-    }
-  )
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.addEventListener('load', resolve)
+    script.addEventListener('error', reject)
+    script.src = `./js/languages/${langCode}.js` + isAppDesign
+    document.head.appendChild(script)
+  })
 }
 export const ready =
   currentLang !== 'en' ? loadLanguage(currentLang) : Promise.resolve()

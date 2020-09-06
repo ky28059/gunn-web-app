@@ -7,11 +7,34 @@ button.customiser-colour {
   background-size: cover;
   background-position: center;
 }
+.inputs-wrapper {
+  display: flex;
+  flex: auto;
+}
 .customiser-inputwrapper {
   position: relative;
   flex: auto;
-  margin: 0 20px;
+  margin-left: 20px;
   line-height: 1;
+}
+.customiser-inputwrapper.input-disabled {
+  color: var(--disabled);
+}
+@media (max-width: 500px) {
+  .inputs-wrapper {
+    flex-direction: column;
+  }
+  .inputs-wrapper > .customiser-inputwrapper {
+    height: 36px;
+    margin-top: -12px;
+    margin-bottom: 6px;
+    transition: margin 0.2s;
+  }
+  .inputs-wrapper > .customiser-inputwrapper.filled,
+  .inputs-wrapper > .customiser-inputwrapper.focus {
+    margin-top: 5px;
+    margin-bottom: 12px;
+  }
 }
 .customiser-label {
   font-size: 16px;
@@ -31,6 +54,9 @@ button.customiser-colour {
   color: var(--theme);
   top: -4px;
 }
+.customiser-inputwrapper.input-disabled .customiser-label {
+  color: var(--disabled);
+}
 body.light .customiser-inputwrapper.focus .customiser-label {
   opacity: 0.87;
 }
@@ -47,21 +73,21 @@ body.light .customiser-inputwrapper.focus .customiser-label {
 }
 .customiser-line {
   position: absolute;
-  height: 1px;
+  border-top: 1px solid var(--input-line);
   top: 32px;
   margin-top: 8px;
   width: 100%;
   transition: all 0.2s;
   pointer-events: none;
-  background-color: var(--input-line);
 }
 .customiser-inputwrapper.hover .customiser-line {
-  height: 2px;
-  background-color: var(--colour);
+  border-top: 2px solid currentColor;
 }
 .customiser-inputwrapper.focus .customiser-line {
-  height: 2px;
-  background-color: var(--theme);
+  border-top: 2px solid var(--theme);
+}
+.customiser-inputwrapper.input-disabled .customiser-line {
+  border-top: 1px dashed var(--disabled);
 }
 .customiser-colourwrapper {
   width: 133.75px;
@@ -80,9 +106,11 @@ body.light .customiser-inputwrapper.focus .customiser-label {
 }
 
 .customiser-image {
-  -webkit-appearance: none;
-  width: 0;
-  min-width: 100%;
-  box-sizing: border-box;
-  margin-top: 10px;
+  height: 36px;
+  margin: 0;
+  transition: margin-top 0.2s;
+}
+.customiser-image.filled,
+.customiser-image.focus {
+  margin-top: 15px;
 }
